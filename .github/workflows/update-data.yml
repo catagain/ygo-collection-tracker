@@ -53,10 +53,12 @@ jobs:
       # Deploy the refreshed data to Vercel. Works even without the GitHub
       # integration: set a VERCEL_TOKEN secret (Settings → Secrets → Actions)
       # and this step deploys the production build automatically.
+      # Note: secrets can't be compared directly in `if`, so we pass it via env.
       - name: Deploy to Vercel
-        if: ${{ secrets.VERCEL_TOKEN != '' }}
-        run: |
-          npx vercel --prod --yes --token ${{ secrets.VERCEL_TOKEN }}
         env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        if: env.VERCEL_TOKEN != ''
+        run: |
+          npx vercel --prod --yes --token "$VERCEL_TOKEN"
