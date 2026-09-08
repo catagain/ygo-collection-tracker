@@ -49,3 +49,14 @@ jobs:
 
       - name: Verify data integrity
         run: node -e "for (const f of ['public/sets-index.json','public/cards-index.json','public/card-links.json']) { JSON.parse(require('fs').readFileSync(f,'utf8')); console.log(f, 'OK'); }"
+
+      # Deploy the refreshed data to Vercel. Works even without the GitHub
+      # integration: set a VERCEL_TOKEN secret (Settings → Secrets → Actions)
+      # and this step deploys the production build automatically.
+      - name: Deploy to Vercel
+        if: ${{ secrets.VERCEL_TOKEN != '' }}
+        run: |
+          npx vercel --prod --yes --token ${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
