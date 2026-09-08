@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "api/auth.ts": { "includeFiles": "lib/**" },
+    "api/sets.ts": { "includeFiles": "lib/**" },
+    "api/collection.ts": { "includeFiles": "lib/**" }
+  },
+  "rewrites": [
+    { "source": "/api/auth/:path*", "destination": "/api/auth?path=/api/auth/:path*" },
+    { "source": "/api/sets/:path*", "destination": "/api/sets?path=/api/sets/:path*" },
+    { "source": "/api/collection", "destination": "/api/collection" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}

@@ -1,0 +1,51 @@
+name: Update card data
+
+# Refreshes the card indexes (sets-index.json, cards-index.json, card-links.json)
+# from YGOPRODECK whenever new card packs are released, then commits the
+# refreshed data. Pushing to `main` triggers a Vercel redeploy (via the GitHub
+# integration), so the live site always has the newest cards + relation graph.
+on:
+  schedule:
+    # Every Monday 03:00 UTC — new OCG/TCG product usually ships on weekends.
+    - cron: '0 3 * * 1'
+  workflow_dispatch: # allow manual run from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Refresh card data (sets + cards + relation graph)
+        run: npm run update:data
+
+      - name: Commit updated indexes
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/sets-index.json public/cards-index.json public/card-links.json
+          if git diff --cached --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "chore(data): refresh card indexes from YGOPRODECK"
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push changes
+        if: steps.commit.outputs.has_changes == 'true'
+        run: git push
+
+      - name: Verify data integrity
+        run: node -e "for (const f of ['public/sets-index.json','public/cards-index.json','public/card-links.json']) { JSON.parse(require('fs').readFileSync(f,'utf8')); console.log(f, 'OK'); }"
