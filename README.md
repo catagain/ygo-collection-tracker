@@ -1,62 +1,203 @@
 # YGO Collection Tracker
 
-A client-side Yu-Gi-Oh! card collection tracker built with React + TypeScript + Vite + Tailwind CSS.
+A full-featured Yu-Gi-Oh! card **collection tracker** + **deck builder** with cloud sync, real market prices (Ruten 露天), and a community-maintained card database.
 
-## Features
+Built with **React + TypeScript + Vite + Tailwind CSS**, deployed on **Vercel**, data persisted in **IndexedDB** with optional **Google login + cloud sync**.
 
-- **Card Collection**: search cards by set code / passcode / card name, add to collection with language, rarity, and quantity
-- **Rarity system**: standard Yu-Gi-Oh rarities including over-frame versions (UR-OR, ScR-OR, PSER-OR)
-- **Deck Management**: create decks, import YDK/text lists, analyze missing cards
-- **Pricing**: rarity-matched prices from YGOPRODECK, plus real Ruten (露天) market prices via a Vercel serverless proxy
-- **Currency**: choose TWD or USD display with automatic conversion
-- **Local storage**: all data persisted in IndexedDB (no backend required)
+---
 
-## Local Development
+## ✨ Features
 
-### Frontend only (no Ruten prices)
+### 🃏 Card Collection
+- Search cards by **set code** (LOB-EN001), **passcode** (8-digit), or **card name**
+- Multi-language support: Japanese / Asian-English / English / Other
+- **Auto pad** passcodes to 8 digits (handles leading zeros lost by JSON sources, e.g. `09205573`)
+- **OCG (Japanese) card artwork** shown for JP cards (official db.yugioh-card.com images)
+- Full rarity system including over-frame versions (UR-OR, ScR-OR, PSER-OR)
+- TCG multi-language set codes supported (FR/DE/IT/PT/SP → EN lookup)
+- Local cache (IndexedDB) for fast repeat lookups
+
+### 💰 Pricing
+- **YGOPRODECK** prices (rarity-matched)
+- **Ruten (露天)** real market prices via a Vercel serverless proxy
+- **Manual price** input — overrides auto prices, never overwritten by refresh
+- Counterfeit/doujin card **filtering** (高仿/同人/打印 cards excluded)
+- Currency toggle: **TWD / USD** with automatic conversion
+- Price source priority: Ruten-first or YGOPRODECK-first
+
+### 🛡️ Deck Building (Master Duel style)
+- Three-column layout: card pool (right) → build zones (center) → card details (left)
+- **Main / Extra / Side** deck zones with counts & limits (60/15/15)
+- **HTML5 drag & drop** + click-to-add
+- Smart classification: Fusion/Synchro/Xyz/Link auto-route to Extra Deck
+- **Related cards**: select a card to see its archetype series + cards that support it / it supports
+- Cards you don't own render **grayscale** when deck count exceeds owned copies
+- Max 3 copies per card; duplicate copies render as separate cards
+- Instant save to IndexedDB (cloud-synced when logged in)
+
+### 📊 Analysis
+- Compare a deck against your collection → **missing cards list**
+- Export missing list as **text** or **CSV**
+
+### ☁️ Cloud Sync & Login
+- **Google OAuth** login (session cookie)
+- Sync **collection + decks + settings** to your account (Upstash Redis)
+- On login, shows local vs cloud diff → choose which side wins (once per session)
+- Offline-friendly: works fully without login (local IndexedDB)
+
+### 🗄️ Community Database (admin review)
+- Users can **submit new set code → passcode mappings** for review
+- Admin review queue (approve / reject / delete)
+- Approved mappings merge into the search index for everyone
+- First login user becomes admin (bootstrap)
+
+### 🔄 Automatic Data Updates
+- Prebuilt indexes: **sets** (set code → card), **cards** (card data), **card-links** (relation graph)
+- **GitHub Actions** weekly cron refreshes all indexes from YGOPRODECK and auto-deploys
+- New card packs appear automatically without manual work
+
+### ⚙️ Settings
+- Currency & price-priority preferences (cloud-synced)
+- Preload/clear local card cache
+- **JSON backup export/import**
+- Danger zone: clear all data
+
+---
+
+## 🚀 Local Development
+
+### Prerequisites
+- Node.js 22+
+- (Optional) Vercel CLI for full local API testing
+
+### 1. Install
 
 ```bash
 npm install
+```
+
+### 2. Frontend only (fast, no API)
+
+```bash
 npm run dev
 ```
 
-### Full local testing (includes Ruten proxy)
-
-The Ruten price proxy is a Vercel serverless function (`api/ruten.ts`). To test it locally, use `vercel dev`, which serves both the static frontend and the `/api/ruten` function:
+### 3. Full local testing (includes Ruten proxy & API)
 
 ```bash
-npm install
 npm run dev:local   # runs `vercel dev`
 ```
 
-The first time you run `vercel dev`, you'll be prompted to log in to Vercel and link the project. After that it starts a local server (default `http://localhost:3000`) with the proxy available at `/api/ruten`.
+The first run of `vercel dev` prompts you to log in and link the project. It serves the frontend **and** the `/api/*` serverless functions on `http://localhost:3000`.
 
-> **Note on `import.meta.env.VITE_API_BASE`**: when running via `vercel dev` or deployed to Vercel, the frontend and API are same-origin, so `VITE_API_BASE` stays empty and the app calls `/api/ruten` relatively. Only set it if you split frontend and API across origins.
+> **`VITE_API_BASE`**: when running via `vercel dev` or deployed on Vercel, frontend & API are same-origin so it stays empty. Only set it if you split origins.
 
-## Ruten Price Proxy
+---
 
-The proxy (`api/ruten.ts`) works around Ruten's CORS and session restrictions:
+## 🔧 Configuration
 
-1. Searches `rtapi.ruten.com.tw/api/search/v4/index.php/core/prod?q=<keyword>` with the required `Referer`/`Origin` headers
-2. Collects matching product IDs
-3. Fetches `prod/v3/index.php/prod?id=...` to get real names and prices (TWD)
-4. Returns `{ items: [{ name, price, currency }] }`
+Copy `.env.example` to `.env.local` and fill in the values (see [`docs/setup-google-kv.md`](docs/setup-google-kv.md) for the full guide):
 
-The frontend (`src/services/ruten.ts`) filters prices (median × 3 outlier removal) and takes the lowest as the card price. The refresh button prefers Ruten prices and falls back to YGOPRODECK.
+| Variable | Purpose |
+|---|---|
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth login (Google Cloud Console) |
+| `SESSION_SECRET` | Signs the session cookie (`openssl rand -hex 32`) |
+| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Upstash Redis (cloud sync + approved sets). Also accepts `UPSTASH_REDIS_REST_URL/TOKEN` |
+| `VITE_API_BASE` | (Optional) custom API base URL |
 
-## Deploying to Vercel
+Set these as **Vercel Environment Variables** for Production/Preview/Development.
+
+---
+
+## ☁️ Deploying to Vercel
+
+### Manual deploy
 
 ```bash
 npm run build
 vercel --prod
 ```
 
-The `vercel.json` rewrites all non-API routes to `index.html` (SPA), while `/api/*` is served by the serverless functions.
+### Auto-deploy (recommended)
 
-## Tests
+The repo includes a GitHub Actions workflow (`.github/workflows/update-data.yml`) that:
+1. Runs **every Monday 03:00 UTC** (or manually via Actions tab)
+2. Refreshes all card indexes from YGOPRODECK (`npm run update:data`)
+3. Commits & pushes changes → triggers Vercel redeploy
+4. Deploys production via `VERCEL_TOKEN`
+
+GitHub repo secrets needed for auto-deploy:
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID` (from `.vercel/project.json` → `orgId`)
+- `VERCEL_PROJECT_ID` (from `.vercel/project.json` → `projectId`)
+
+---
+
+## 🧱 Data Architecture
+
+| File | Source | Built by | Purpose |
+|---|---|---|---|
+| `public/sets-index.json` | YGOPRODECK pack pages | `scripts/build-sets-index.mjs` | set code → card (name/passcode/rarity) |
+| `public/cards-index.json` | YGOPRODECK cardinfo API | `scripts/build-card-index.mjs` | passcode → card data (type/race/image) |
+| `public/card-links.json` | YGOPRODECK cardinfo API | `scripts/build-card-links.mjs` | passcode → relation graph (archetype/mentions) |
+
+Refresh all indexes with one command:
 
 ```bash
-npm run test
-npm run lint
-npm run build
+npm run update:data
 ```
+
+The card-links relation graph powers the deck builder's **Related Cards** feature:
+- **sameArchetype** — cards in the same series (e.g. all "Blue-Eyes" cards)
+- **mentionedBy** — cards whose effect text names the selected card
+- **mentions** — cards named by the selected card's effect text
+
+---
+
+## 🗄️ API (Vercel Serverless Functions)
+
+| Route | Purpose |
+|---|---|
+| `GET /api/ruten` | Ruten price proxy (CORS/session workaround) |
+| `GET /api/yugiohcn` | OCG database proxy (db.yugioh-card-cn.com) |
+| `GET /api/yugopack` | YGOPRODECK pack-page passcode resolver |
+| `GET /api/ygosets` | YGOPRODECK set list proxy |
+| `POST /api/auth/*` | Google OAuth (google/callback/me/logout) |
+| `GET/PUT/DELETE /api/collection` | Per-user cloud collection sync |
+| `GET/POST /api/sets/*` | Community database submissions & admin review |
+
+---
+
+## 🧪 Tests
+
+```bash
+npm run test      # Vitest unit tests
+npm run lint      # oxlint
+npm run build     # type-check + production build
+```
+
+---
+
+## 📁 Project Structure
+
+```
+api/          # Vercel serverless functions (proxy + auth + sync)
+lib/          # Shared server-side logic (auth, KV)
+public/       # Prebuilt data indexes + icons
+scripts/      # Data build scripts (sets/cards/links)
+src/
+  components/ # Layout & shared UI
+  features/   # Pages: collection, decks, deckBuilder, analysis, database, settings, sync
+  services/   # Card API, storage (IndexedDB), auth, sync, pricing
+  stores/     # Zustand app store
+  types/      # Shared TypeScript types
+docs/         # Setup guides
+```
+
+---
+
+## 📄 License
+
+MIT — free to use, modify, and deploy.
+
+*Yu-Gi-Oh! is a registered trademark of Konami Digital Entertainment. This project is a fan tool and is not affiliated with or endorsed by Konami.*
